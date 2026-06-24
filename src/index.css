@@ -90,6 +90,37 @@
   }
 }
 
+/* Светлая тема */
+.light-theme {
+  --background: 40 30% 97%;
+  --foreground: 30 20% 12%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 30 20% 12%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 30 20% 12%;
+
+  --primary: 38 80% 42%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 36 20% 92%;
+  --secondary-foreground: 30 20% 20%;
+
+  --muted: 36 20% 92%;
+  --muted-foreground: 30 10% 50%;
+
+  --accent: 38 40% 88%;
+  --accent-foreground: 38 60% 30%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 36 20% 84%;
+  --input: 36 20% 84%;
+  --ring: 38 80% 42%;
+}
+
 @layer base {
   * {
     @apply border-border;
