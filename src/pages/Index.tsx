@@ -25,13 +25,7 @@ type Message = {
   mine: boolean;
 };
 
-const initialChats: Chat[] = [
-  { id: 1, name: 'Анна Соколова', handle: '@anna_s', last: 'Договор отправлю к 15:00', time: '14:32', unread: 2, online: true },
-  { id: 2, name: 'Отдел продаж', handle: 'группа · 8 участников', last: 'Игорь: согласовали бюджет', time: '13:10', unread: 5, online: false, group: true },
-  { id: 3, name: 'Дмитрий Орлов', handle: '@d_orlov', last: 'Спасибо за встречу', time: '11:48', unread: 0, online: true },
-  { id: 4, name: 'Елена Власова', handle: '@e_vlasova', last: 'Файлы во вложении', time: 'Вчера', unread: 0, online: false },
-  { id: 5, name: 'Совет директоров', handle: 'группа · 5 участников', last: 'Вы: повестка на четверг', time: 'Вчера', unread: 0, online: false, group: true },
-];
+const initialChats: Chat[] = [];
 
 const initialMessages: Message[] = [
   { id: 1, text: 'Добрый день! Подготовил коммерческое предложение по проекту.', time: '14:20', mine: false },
@@ -82,7 +76,7 @@ const Index = () => {
       <aside className="w-[72px] shrink-0 bg-card border-r border-border flex flex-col items-center py-5 gap-2">
         <div className="mb-4 flex flex-col items-center select-none">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E6B84A] to-[#A8801F] flex items-center justify-center shadow-lg shadow-primary/30">
-            <Icon name="Hexagon" size={22} className="text-[#2a2008]" />
+            <Icon name="Gem" size={22} className="text-[#2a2008]" />
           </div>
           <span className="text-[10px] font-display font-bold tracking-widest text-primary mt-1 uppercase">Prime</span>
         </div>
