@@ -80,21 +80,31 @@ const Index = () => {
     <div className="h-screen w-full flex bg-background text-foreground font-sans overflow-hidden">
       {/* Левая навигация */}
       <aside className="w-[72px] shrink-0 bg-card border-r border-border flex flex-col items-center py-5 gap-2">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E6B84A] to-[#A8801F] flex items-center justify-center mb-4 shadow-lg shadow-primary/30">
-          <Icon name="Hexagon" size={22} className="text-[#2a2008]" />
+        <div className="mb-4 flex flex-col items-center select-none">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E6B84A] to-[#A8801F] flex items-center justify-center shadow-lg shadow-primary/30">
+            <Icon name="Hexagon" size={22} className="text-[#2a2008]" />
+          </div>
+          <span className="text-[10px] font-display font-bold tracking-widest text-primary mt-1 uppercase">Prime</span>
         </div>
         {navItems.map((item) => (
-          <button
-            key={item.key}
-            onClick={() => setActive(item.key)}
-            className={`relative w-12 h-12 rounded-xl flex items-center justify-center transition-all group ${
-              active === item.key ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-            }`}
-            title={item.label}
-          >
-            <Icon name={item.icon} size={21} />
-            {active === item.key && <span className="absolute left-0 w-1 h-6 rounded-r bg-primary" />}
-          </button>
+          <div key={item.key} className="relative group">
+            <button
+              onClick={() => setActive(item.key)}
+              className={`relative w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
+                active === item.key ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              <Icon name={item.icon} size={21} />
+              {active === item.key && <span className="absolute left-0 w-1 h-6 rounded-r bg-primary" />}
+            </button>
+            {/* Тултип */}
+            <div className="pointer-events-none absolute left-[56px] top-1/2 -translate-y-1/2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              <div className="bg-[#1a1209] border border-primary/20 text-foreground text-xs font-medium px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xl">
+                {item.label}
+                <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#1a1209]" />
+              </div>
+            </div>
+          </div>
         ))}
         <div className="mt-auto">
           <Avatar className="w-10 h-10 border border-border">
@@ -161,11 +171,14 @@ const Index = () => {
             ))}
 
           {active === 'contacts' &&
-            filteredChats.map((chat) => (
+            filteredChats.filter((c) => !c.group).map((chat) => (
               <div key={chat.id} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors mb-0.5">
-                <Avatar className="w-11 h-11">
-                  <AvatarFallback className="bg-secondary font-semibold">{chat.name.split(' ').map((w) => w[0]).join('')}</AvatarFallback>
-                </Avatar>
+                <div className="relative shrink-0">
+                  <Avatar className="w-11 h-11">
+                    <AvatarFallback className="bg-secondary font-semibold">{chat.name.split(' ').map((w) => w[0]).join('')}</AvatarFallback>
+                  </Avatar>
+                  {chat.online && <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-card" />}
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate">{chat.name}</div>
                   <div className="text-xs text-muted-foreground">{chat.handle}</div>
