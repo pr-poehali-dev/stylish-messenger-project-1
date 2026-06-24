@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,40 +13,19 @@ const API = {
   contacts: 'https://functions.poehali.dev/ab2b7912-6900-46eb-8256-042b9e377d8c',
 };
 
-type Chat = {
-  id: number;
-  name: string;
-  handle: string;
-  last: string;
-  time: string;
-  unread: number;
-  online: boolean;
-  group?: boolean;
-};
+type Chat = { id: number; name: string; handle: string; last: string; time: string; unread: number; online: boolean; group?: boolean; };
+type Message = { id: number; text: string; time: string; mine: boolean; };
+type Contact = { name: string; nick: string; phone: string; };
 
-type Message = {
-  id: number;
-  text: string;
-  time: string;
-  mine: boolean;
-};
-
-type Contact = {
-  name: string;
-  nick: string;
-  phone: string;
-};
-
-const initialChats: Chat[] = [];
-
-const initialMessages: Message[] = [
-  { id: 1, text: 'Добрый день! Подготовил коммерческое предложение по проекту.', time: '14:20', mine: false },
-  { id: 2, text: 'Здравствуйте, Анна. Отлично, жду документы.', time: '14:25', mine: true },
-  { id: 3, text: 'Уточните, удобно ли согласование во вторник?', time: '14:28', mine: false },
-  { id: 4, text: 'Да, вторник подходит. Договор отправлю к 15:00.', time: '14:32', mine: false },
+const DEMO_MESSAGES: Message[] = [
+  { id: 1, text: 'Добрый день! Подготовил коммерческое предложение.', time: '14:20', mine: false },
+  { id: 2, text: 'Отлично, жду документы на почту.', time: '14:25', mine: true },
+  { id: 3, text: 'Уточните — согласование во вторник удобно?', time: '14:28', mine: false },
+  { id: 4, text: 'Да, вторник подходит. Договор пришлю к 15:00.', time: '14:32', mine: false },
+  { id: 5, text: 'Принято, буду ждать.', time: '14:33', mine: true },
 ];
 
-const navItems = [
+const NAV = [
   { key: 'chats', icon: 'MessageSquare', label: 'Чаты' },
   { key: 'calls', icon: 'Phone', label: 'Звонки' },
   { key: 'contacts', icon: 'Users', label: 'Контакты' },
@@ -54,542 +33,619 @@ const navItems = [
   { key: 'settings', icon: 'Settings', label: 'Настройки' },
 ];
 
-const calls = [
+const CALLS = [
   { name: 'Дмитрий Орлов', type: 'out', time: 'Сегодня, 11:48', dur: '12 мин', video: false },
   { name: 'Анна Соколова', type: 'in', time: 'Сегодня, 09:15', dur: '4 мин', video: true },
   { name: 'Отдел продаж', type: 'missed', time: 'Вчера, 18:02', dur: 'Пропущенный', video: false },
   { name: 'Елена Власова', type: 'in', time: 'Вчера, 14:30', dur: '23 мин', video: false },
 ];
 
-const Index = () => {
+const NOTIFS = [
+  { icon: 'MessageSquare', color: 'text-blue-400', bg: 'bg-blue-400/10', title: 'Новое сообщение', text: 'Анна Соколова: «Договор готов»', time: '5 мин' },
+  { icon: 'UserPlus', color: 'text-green-400', bg: 'bg-green-400/10', title: 'Новый контакт', text: 'Дмитрий Орлов добавил вас', time: '1 ч' },
+  { icon: 'PhoneMissed', color: 'text-red-400', bg: 'bg-red-400/10', title: 'Пропущенный звонок', text: 'Отдел продаж · вчера 18:02', time: 'Вчера' },
+];
+
+const avatarColor = (name: string) => {
+  const colors = ['bg-violet-500','bg-blue-500','bg-emerald-500','bg-rose-500','bg-amber-500','bg-cyan-500'];
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % colors.length;
+  return colors[h];
+};
+
+const formatPhone = (val: string) => {
+  const d = val.replace(/\D/g, '').slice(0, 11);
+  if (!d) return '';
+  let r = '+7';
+  if (d.length > 1) r += ' (' + d.slice(1, 4);
+  if (d.length >= 4) r += ') ' + d.slice(4, 7);
+  if (d.length >= 7) r += '-' + d.slice(7, 9);
+  if (d.length >= 9) r += '-' + d.slice(9, 11);
+  return r;
+};
+
+export default function Index() {
   const [onboarded, setOnboarded] = useState(() => !!localStorage.getItem('prime_nick'));
-  const [nickInput, setNickInput] = useState('');
+  const [step, setStep] = useState(1);
   const [nameInput, setNameInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
-  const [myNick, setMyNick] = useState(() => localStorage.getItem('prime_nick') || '');
+  const [nickInput, setNickInput] = useState('');
   const [myName, setMyName] = useState(() => localStorage.getItem('prime_name') || '');
-  const [step, setStep] = useState(1);
+  const [myNick, setMyNick] = useState(() => localStorage.getItem('prime_nick') || '');
 
   const [active, setActive] = useState('chats');
-  const [chats] = useState(initialChats);
-  const [selectedChat, setSelectedChat] = useState<Chat | null>(initialChats[0]);
-  const [messages, setMessages] = useState(initialMessages);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [selected, setSelected] = useState<Chat | null>(null);
+  const [messages, setMessages] = useState(DEMO_MESSAGES);
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (onboarded) {
-      setMyNick(localStorage.getItem('prime_nick') || '');
-      setMyName(localStorage.getItem('prime_name') || '');
-    }
-  }, [onboarded]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const formatPhone = (val: string) => {
-    const digits = val.replace(/\D/g, '').slice(0, 11);
-    if (!digits) return '';
-    let res = '+7';
-    if (digits.length > 1) res += ' (' + digits.slice(1, 4);
-    if (digits.length >= 4) res += ') ' + digits.slice(4, 7);
-    if (digits.length >= 7) res += '-' + digits.slice(7, 9);
-    if (digits.length >= 9) res += '-' + digits.slice(9, 11);
-    return res;
-  };
+  const initials = myName ? myName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
 
-  const handleOnboard = () => {
+  const handleOnboard = async () => {
     if (step === 1 && nameInput.trim()) { setStep(2); return; }
     if (step === 2 && phoneInput.replace(/\D/g, '').length >= 11) { setStep(3); return; }
     if (step === 3 && nickInput.trim()) {
       const nick = nickInput.startsWith('@') ? nickInput : '@' + nickInput;
+      try {
+        await fetch(API.register, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: nameInput.trim(), nick, phone: phoneInput }),
+        });
+      } catch (e) { console.error(e); }
       localStorage.setItem('prime_nick', nick);
       localStorage.setItem('prime_name', nameInput.trim());
       localStorage.setItem('prime_phone', phoneInput);
-      setMyNick(nick);
-      setMyName(nameInput.trim());
+      setMyNick(nick); setMyName(nameInput.trim());
       setOnboarded(true);
     }
   };
 
-  const initials = myName ? myName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() : 'МК';
+  const importPhoneContacts = async () => {
+    if (!('contacts' in navigator && 'ContactsManager' in window)) {
+      setImportResult('Ваш браузер не поддерживает импорт контактов. Попробуйте Chrome на Android.');
+      return;
+    }
+    setImporting(true);
+    try {
+      // @ts-expect-error Contact Picker API не в стандартных типах
+      const result = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+      const imported: Contact[] = (result as {name: string[]; tel: string[]}[])
+        .filter(c => c.name?.[0] && c.tel?.[0])
+        .map(c => ({ name: c.name[0], nick: '', phone: c.tel[0] }));
+      setContacts(prev => {
+        const existing = new Set(prev.map(c => c.phone));
+        const newOnes = imported.filter(c => !existing.has(c.phone));
+        return [...prev, ...newOnes];
+      });
+      setImportResult(`Импортировано ${imported.length} контактов`);
+    } catch (_) {
+      setImportResult('Импорт отменён.');
+    }
+    setImporting(false);
+    setTimeout(() => setImportResult(''), 3000);
+  };
 
+  const send = () => {
+    if (!draft.trim()) return;
+    const now = new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' });
+    setMessages(m => [...m, { id: Date.now(), text: draft, time: now, mine: true }]);
+    setDraft('');
+  };
+
+  const filtered = chats.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.handle.toLowerCase().includes(search.toLowerCase())
+  );
+  const filteredContacts = contacts.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
+    c.phone.includes(search)
+  );
+
+  // ─── ОНБОРДИНГ ───────────────────────────────────────────────
   if (!onboarded) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-background font-sans relative overflow-hidden">
-        {/* фоновый узор */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(180,140,40,0.15),transparent)]" />
-        <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_60px,rgba(180,140,40,0.03)_60px,rgba(180,140,40,0.03)_61px)]" />
+      <div className="h-screen w-full flex items-center justify-center bg-background font-sans overflow-hidden relative">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_0%,rgba(180,140,40,0.18),transparent)]" />
+        <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_80px,rgba(180,140,40,0.025)_80px,rgba(180,140,40,0.025)_81px)]" />
 
-        <div className="relative z-10 w-full max-w-sm px-6 animate-fade-in">
-          {/* Логотип */}
+        <div className="relative z-10 w-full max-w-[380px] px-6 animate-fade-in">
           <div className="flex flex-col items-center mb-10">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#E6B84A] to-[#A8801F] flex items-center justify-center shadow-2xl shadow-primary/30 mb-3">
-              <Icon name="Gem" size={32} className="text-[#2a2008]" />
+            <div className="w-20 h-20 rounded-[22px] bg-gradient-to-br from-[#F0C84E] to-[#9A7118] flex items-center justify-center shadow-2xl shadow-primary/40 mb-4">
+              <Icon name="Gem" size={38} className="text-[#2a1f00]" />
             </div>
-            <span className="text-xl font-display font-bold tracking-widest text-primary uppercase">Prime</span>
-            <p className="text-sm text-muted-foreground mt-1">Деловой мессенджер</p>
+            <h1 className="text-2xl font-display font-bold tracking-[0.2em] text-primary uppercase">Prime</h1>
+            <p className="text-sm text-muted-foreground mt-1 tracking-wide">Деловой мессенджер</p>
           </div>
 
-          {/* Шаг 1 — Имя */}
           {step === 1 && (
             <div className="space-y-4 animate-fade-in">
-              <div>
-                <p className="text-lg font-semibold mb-1">Как вас зовут?</p>
-                <p className="text-sm text-muted-foreground">Укажите имя и фамилию — их будут видеть ваши контакты</p>
+              <div className="mb-2">
+                <p className="text-xl font-semibold">Как вас зовут?</p>
+                <p className="text-sm text-muted-foreground mt-1">Имя и фамилию увидят ваши контакты</p>
               </div>
-              <Input
-                autoFocus
-                value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleOnboard()}
-                placeholder="Иван Петров"
-                className="bg-secondary border-none h-12 text-base"
-              />
-              <Button
-                onClick={handleOnboard}
-                disabled={!nameInput.trim()}
-                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
-              >
+              <Input autoFocus value={nameInput} onChange={e => setNameInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleOnboard()}
+                placeholder="Иван Петров" className="bg-secondary border-none h-13 text-base rounded-xl" />
+              <Button onClick={handleOnboard} disabled={!nameInput.trim()}
+                className="w-full h-13 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-base">
                 Продолжить <Icon name="ArrowRight" size={18} className="ml-2" />
               </Button>
             </div>
           )}
 
-          {/* Шаг 2 — Телефон */}
           {step === 2 && (
             <div className="space-y-4 animate-fade-in">
-              <div>
-                <p className="text-lg font-semibold mb-1">Номер телефона</p>
-                <p className="text-sm text-muted-foreground">Нужен для входа и восстановления доступа</p>
+              <div className="mb-2">
+                <p className="text-xl font-semibold">Номер телефона</p>
+                <p className="text-sm text-muted-foreground mt-1">Для входа и восстановления доступа</p>
               </div>
               <div className="relative">
                 <Icon name="Phone" size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  autoFocus
-                  value={phoneInput}
-                  onChange={(e) => setPhoneInput(formatPhone(e.target.value))}
-                  onKeyDown={(e) => e.key === 'Enter' && handleOnboard()}
+                <Input autoFocus value={phoneInput}
+                  onChange={e => setPhoneInput(formatPhone(e.target.value))}
+                  onKeyDown={e => e.key === 'Enter' && handleOnboard()}
                   placeholder="+7 (___) ___-__-__"
-                  className="bg-secondary border-none h-12 text-base pl-10"
-                />
+                  className="bg-secondary border-none h-13 text-base pl-10 rounded-xl" />
               </div>
-              <Button
-                onClick={handleOnboard}
-                disabled={phoneInput.replace(/\D/g, '').length < 11}
-                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
-              >
+              <Button onClick={handleOnboard} disabled={phoneInput.replace(/\D/g,'').length < 11}
+                className="w-full h-13 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-base">
                 Продолжить <Icon name="ArrowRight" size={18} className="ml-2" />
               </Button>
-              <button onClick={() => setStep(1)} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">
-                ← Назад
-              </button>
+              <button onClick={() => setStep(1)} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">← Назад</button>
             </div>
           )}
 
-          {/* Шаг 3 — Ник */}
           {step === 3 && (
             <div className="space-y-4 animate-fade-in">
-              <div>
-                <p className="text-lg font-semibold mb-1">Придумайте ник</p>
-                <p className="text-sm text-muted-foreground">По нику вас смогут найти и добавить в Prime</p>
+              <div className="mb-2">
+                <p className="text-xl font-semibold">Ваш ник</p>
+                <p className="text-sm text-muted-foreground mt-1">По нику вас найдут в Prime</p>
               </div>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary font-semibold">@</span>
-                <Input
-                  autoFocus
-                  value={nickInput.replace('@', '')}
-                  onChange={(e) => setNickInput(e.target.value.replace('@', ''))}
-                  onKeyDown={(e) => e.key === 'Enter' && handleOnboard()}
-                  placeholder="username"
-                  className="bg-secondary border-none h-12 text-base pl-8"
-                />
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary font-bold text-base">@</span>
+                <Input autoFocus value={nickInput.replace('@','')}
+                  onChange={e => setNickInput(e.target.value.replace('@',''))}
+                  onKeyDown={e => e.key === 'Enter' && handleOnboard()}
+                  placeholder="username" className="bg-secondary border-none h-13 text-base pl-8 rounded-xl" />
               </div>
-              <Button
-                onClick={handleOnboard}
-                disabled={!nickInput.trim()}
-                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
-              >
+              <Button onClick={handleOnboard} disabled={!nickInput.trim()}
+                className="w-full h-13 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl text-base">
                 Войти в Prime <Icon name="Gem" size={17} className="ml-2" />
               </Button>
-              <button onClick={() => setStep(2)} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">
-                ← Назад
-              </button>
+              <button onClick={() => setStep(2)} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">← Назад</button>
             </div>
           )}
 
-          {/* Индикатор шагов */}
           <div className="flex justify-center gap-2 mt-8">
-            <span className={`w-6 h-1 rounded-full transition-colors ${step >= 1 ? 'bg-primary' : 'bg-secondary'}`} />
-            <span className={`w-6 h-1 rounded-full transition-colors ${step >= 2 ? 'bg-primary' : 'bg-secondary'}`} />
-            <span className={`w-6 h-1 rounded-full transition-colors ${step >= 3 ? 'bg-primary' : 'bg-secondary'}`} />
+            {[1,2,3].map(s => (
+              <span key={s} className={`h-1 rounded-full transition-all duration-300 ${step === s ? 'w-8 bg-primary' : step > s ? 'w-4 bg-primary/50' : 'w-4 bg-secondary'}`} />
+            ))}
           </div>
         </div>
       </div>
     );
   }
 
-  const sendMessage = () => {
-    if (!draft.trim()) return;
-    setMessages((m) => [
-      ...m,
-      { id: Date.now(), text: draft, time: new Date().toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }), mine: true },
-    ]);
-    setDraft('');
-  };
-
-  const filteredChats = chats.filter(
-    (c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.handle.toLowerCase().includes(search.toLowerCase())
-  );
-
+  // ─── ГЛАВНЫЙ ЭКРАН ────────────────────────────────────────────
   return (
     <div className="h-screen w-full flex bg-background text-foreground font-sans overflow-hidden">
-      {/* Левая навигация */}
-      <aside className="w-[72px] shrink-0 bg-card border-r border-border flex flex-col items-center py-5 gap-2">
-        <div className="mb-4 flex flex-col items-center select-none">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E6B84A] to-[#A8801F] flex items-center justify-center shadow-lg shadow-primary/30">
-            <Icon name="Gem" size={22} className="text-[#2a2008]" />
+
+      {/* ── Боковая навигация ── */}
+      <aside className="w-[68px] shrink-0 flex flex-col items-center py-4 gap-1 bg-card border-r border-border/60">
+        <div className="flex flex-col items-center mb-5 select-none">
+          <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-[#F0C84E] to-[#9A7118] flex items-center justify-center shadow-lg shadow-primary/30">
+            <Icon name="Gem" size={19} className="text-[#2a1f00]" />
           </div>
-          <span className="text-[10px] font-display font-bold tracking-widest text-primary mt-1 uppercase">Prime</span>
+          <span className="text-[9px] font-display font-bold tracking-[0.18em] text-primary mt-1 uppercase">Prime</span>
         </div>
-        {navItems.map((item) => (
-          <div key={item.key} className="relative group">
-            <button
-              onClick={() => setActive(item.key)}
-              className={`relative w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                active === item.key ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-              }`}
-            >
-              <Icon name={item.icon} size={21} />
-              {active === item.key && <span className="absolute left-0 w-1 h-6 rounded-r bg-primary" />}
+
+        {NAV.map(item => (
+          <div key={item.key} className="relative group w-full flex justify-center">
+            <button onClick={() => setActive(item.key)}
+              className={`relative w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+                active === item.key
+                  ? 'bg-primary/20 text-primary shadow-sm'
+                  : 'text-muted-foreground/60 hover:bg-secondary hover:text-foreground'
+              }`}>
+              <Icon name={item.icon} size={20} />
+              {active === item.key && <span className="absolute -left-[3px] w-[3px] h-5 rounded-r-full bg-primary" />}
             </button>
-            {/* Тултип */}
-            <div className="pointer-events-none absolute left-[56px] top-1/2 -translate-y-1/2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-              <div className="bg-[#1a1209] border border-primary/20 text-foreground text-xs font-medium px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xl">
+            <div className="pointer-events-none absolute left-[58px] top-1/2 -translate-y-1/2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+              <div className="bg-[#1c1506] border border-primary/25 text-sm px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xl text-foreground">
                 {item.label}
-                <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#1a1209]" />
+                <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#1c1506]" />
               </div>
             </div>
           </div>
         ))}
-        <div className="mt-auto group relative">
-          <Avatar className="w-10 h-10 border border-primary/30 cursor-pointer">
-            <AvatarFallback className="bg-primary/20 text-primary text-sm font-bold">{initials}</AvatarFallback>
+
+        <div className="mt-auto group relative flex justify-center">
+          <Avatar className="w-9 h-9 border-2 border-primary/40 cursor-pointer">
+            <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{initials}</AvatarFallback>
           </Avatar>
-          <div className="pointer-events-none absolute left-[48px] bottom-0 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-            <div className="bg-[#1a1209] border border-primary/20 text-foreground text-xs px-3 py-2 rounded-lg whitespace-nowrap shadow-xl">
-              <div className="font-semibold">{myName}</div>
-              <div className="text-muted-foreground">{myNick}</div>
-              <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#1a1209]" />
+          <div className="pointer-events-none absolute left-[46px] bottom-0 z-50 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="bg-[#1c1506] border border-primary/25 px-3 py-2 rounded-lg whitespace-nowrap shadow-xl">
+              <div className="font-semibold text-sm text-foreground">{myName}</div>
+              <div className="text-xs text-muted-foreground">{myNick}</div>
+              <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#1c1506]" />
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Список / разделы */}
-      <section className="w-[340px] shrink-0 bg-card/40 border-r border-border flex flex-col">
-        <header className="px-5 pt-6 pb-4">
+      {/* ── Панель списка ── */}
+      <section className="w-[320px] shrink-0 flex flex-col bg-card/50 border-r border-border/60">
+        {/* Шапка */}
+        <div className="px-4 pt-5 pb-3">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-display font-bold tracking-tight">
-              {navItems.find((n) => n.key === active)?.label}
-            </h1>
-            {active === 'chats' && <AddContactDialog />}
+            <h2 className="text-[17px] font-display font-bold">{NAV.find(n => n.key === active)?.label}</h2>
+            <div className="flex gap-1">
+              {active === 'chats' && <AddContactDialog myNick={myNick} />}
+              {active === 'contacts' && (
+                <Button size="icon" variant="ghost" onClick={importPhoneContacts}
+                  className="h-8 w-8 text-muted-foreground hover:text-primary" title="Импорт из телефона" disabled={importing}>
+                  <Icon name={importing ? 'Loader' : 'BookUser'} size={18} className={importing ? 'animate-spin' : ''} />
+                </Button>
+              )}
+            </div>
           </div>
           {(active === 'chats' || active === 'contacts') && (
             <div className="relative">
-              <Icon name="Search" size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Поиск по нику или имени"
-                className="pl-9 bg-secondary border-none h-10 text-sm"
-              />
+              <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Поиск" className="pl-9 bg-secondary/80 border-none h-9 text-sm rounded-xl" />
             </div>
           )}
-        </header>
+          {importResult && (
+            <p className="text-xs text-primary mt-2 text-center animate-fade-in">{importResult}</p>
+          )}
+        </div>
 
-        <div className="flex-1 overflow-y-auto px-2 pb-4">
-          {active === 'chats' &&
-            filteredChats.map((chat) => (
-              <button
-                key={chat.id}
-                onClick={() => setSelectedChat(chat)}
-                className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-colors mb-0.5 ${
-                  selectedChat?.id === chat.id ? 'bg-secondary' : 'hover:bg-secondary/50'
-                }`}
-              >
+        {/* Контент списка */}
+        <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
+
+          {/* Чаты */}
+          {active === 'chats' && (
+            filtered.length === 0 ? (
+              <EmptyState icon="MessageSquare" text="Нет чатов. Добавьте контакт, чтобы начать общение." />
+            ) : filtered.map(chat => (
+              <button key={chat.id} onClick={() => setSelected(chat)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-all ${
+                  selected?.id === chat.id ? 'bg-primary/12' : 'hover:bg-secondary/60'
+                }`}>
                 <div className="relative shrink-0">
                   <Avatar className="w-12 h-12">
-                    <AvatarFallback className={`${chat.group ? 'bg-primary/20 text-primary' : 'bg-secondary text-foreground'} font-semibold`}>
-                      {chat.group ? <Icon name="Users" size={20} /> : chat.name.split(' ').map((w) => w[0]).join('')}
+                    <AvatarFallback className={`${chat.group ? 'bg-primary/20 text-primary' : avatarColor(chat.name) + ' text-white'} font-semibold text-sm`}>
+                      {chat.group ? <Icon name="Users" size={18} /> : chat.name.split(' ').map(w=>w[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
-                  {chat.online && <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-card" />}
+                  {chat.online && <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-card ring-1 ring-green-400/30" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm truncate">{chat.name}</span>
-                    <span className="text-xs text-muted-foreground shrink-0 ml-2">{chat.time}</span>
+                    <span className="font-semibold text-[14px] truncate">{chat.name}</span>
+                    <span className="text-[11px] text-muted-foreground shrink-0 ml-2">{chat.time}</span>
                   </div>
                   <div className="flex items-center justify-between mt-0.5">
-                    <span className="text-sm text-muted-foreground truncate">{chat.last}</span>
+                    <span className="text-[13px] text-muted-foreground truncate">{chat.last}</span>
                     {chat.unread > 0 && (
-                      <span className="shrink-0 ml-2 min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
+                      <span className="shrink-0 ml-2 min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
                         {chat.unread}
                       </span>
                     )}
                   </div>
                 </div>
               </button>
-            ))}
+            ))
+          )}
 
-          {active === 'contacts' &&
-            filteredChats.filter((c) => !c.group).map((chat) => (
-              <div key={chat.id} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors mb-0.5">
-                <div className="relative shrink-0">
-                  <Avatar className="w-11 h-11">
-                    <AvatarFallback className="bg-secondary font-semibold">{chat.name.split(' ').map((w) => w[0]).join('')}</AvatarFallback>
-                  </Avatar>
-                  {chat.online && <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-card" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate">{chat.name}</div>
-                  <div className="text-xs text-muted-foreground">{chat.handle}</div>
-                </div>
-                <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-primary">
-                  <Icon name="Phone" size={17} />
+          {/* Контакты */}
+          {active === 'contacts' && (
+            filteredContacts.length === 0 ? (
+              <div className="px-2 space-y-3">
+                <EmptyState icon="Users" text="Контактов пока нет." />
+                <Button onClick={importPhoneContacts} disabled={importing}
+                  className="w-full h-11 bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 rounded-xl font-semibold">
+                  <Icon name={importing ? 'Loader' : 'BookUser'} size={18} className={`mr-2 ${importing ? 'animate-spin' : ''}`} />
+                  Импорт из телефонной книги
                 </Button>
+                {importResult && <p className="text-xs text-primary text-center">{importResult}</p>}
               </div>
-            ))}
-
-          {active === 'calls' &&
-            calls.map((call, i) => (
-              <div key={i} className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors mb-0.5">
-                <Avatar className="w-11 h-11">
-                  <AvatarFallback className="bg-secondary font-semibold">{call.name.split(' ').map((w) => w[0]).join('')}</AvatarFallback>
+            ) : filteredContacts.map((c, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-secondary/60 transition-colors">
+                <Avatar className="w-11 h-11 shrink-0">
+                  <AvatarFallback className={`${avatarColor(c.name)} text-white font-semibold text-sm`}>
+                    {c.name.split(' ').map(w=>w[0]).join('').slice(0,2)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate">{call.name}</div>
-                  <div className={`text-xs flex items-center gap-1 ${call.type === 'missed' ? 'text-destructive' : 'text-muted-foreground'}`}>
-                    <Icon name={call.type === 'in' ? 'PhoneIncoming' : call.type === 'out' ? 'PhoneOutgoing' : 'PhoneMissed'} size={13} />
-                    {call.time} · {call.dur}
-                  </div>
+                  <div className="font-semibold text-[14px] truncate">{c.name}</div>
+                  <div className="text-[12px] text-muted-foreground truncate">{c.nick || c.phone}</div>
                 </div>
-                <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-primary">
-                  <Icon name={call.video ? 'Video' : 'Phone'} size={17} />
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary shrink-0">
+                  <Icon name="Phone" size={16} />
                 </Button>
               </div>
-            ))}
+            ))
+          )}
 
+          {/* Звонки */}
+          {active === 'calls' && CALLS.map((call, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-secondary/60 transition-colors">
+              <Avatar className="w-11 h-11 shrink-0">
+                <AvatarFallback className={`${avatarColor(call.name)} text-white font-semibold text-sm`}>
+                  {call.name.split(' ').map(w=>w[0]).join('').slice(0,2)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-[14px] truncate">{call.name}</div>
+                <div className={`text-[12px] flex items-center gap-1.5 mt-0.5 ${call.type === 'missed' ? 'text-red-400' : 'text-muted-foreground'}`}>
+                  <Icon name={call.type==='in'?'PhoneIncoming':call.type==='out'?'PhoneOutgoing':'PhoneMissed'} size={12} />
+                  <span>{call.time} · {call.dur}</span>
+                </div>
+              </div>
+              <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary shrink-0">
+                <Icon name={call.video ? 'Video' : 'Phone'} size={16} />
+              </Button>
+            </div>
+          ))}
+
+          {/* Уведомления */}
           {active === 'notifications' && (
-            <div className="space-y-2 px-1">
-              {[
-                { icon: 'MessageSquare', title: 'Новое сообщение', text: 'Анна Соколова отправила вам документ', time: '5 мин назад' },
-                { icon: 'UserPlus', title: 'Новый контакт', text: 'Дмитрий Орлов добавил вас в контакты', time: '1 ч назад' },
-                { icon: 'Users', title: 'Группа «Отдел продаж»', text: 'Вас добавили в группу', time: '3 ч назад' },
-                { icon: 'PhoneMissed', title: 'Пропущенный звонок', text: 'Отдел продаж · вчера 18:02', time: 'Вчера' },
-              ].map((n, i) => (
-                <div key={i} className="flex gap-3 p-3 rounded-xl bg-secondary/40 hover:bg-secondary transition-colors">
-                  <div className="w-10 h-10 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+            <div className="space-y-2 px-1 pt-1">
+              {NOTIFS.map((n, i) => (
+                <div key={i} className="flex gap-3 p-3 rounded-2xl bg-secondary/40 hover:bg-secondary/70 transition-colors cursor-pointer">
+                  <div className={`w-10 h-10 rounded-xl ${n.bg} ${n.color} flex items-center justify-center shrink-0`}>
                     <Icon name={n.icon} size={18} />
                   </div>
-                  <div className="min-w-0">
-                    <div className="font-semibold text-sm">{n.title}</div>
-                    <div className="text-sm text-muted-foreground truncate">{n.text}</div>
-                    <div className="text-xs text-muted-foreground/70 mt-0.5">{n.time}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-[13px]">{n.title}</span>
+                      <span className="text-[11px] text-muted-foreground">{n.time}</span>
+                    </div>
+                    <div className="text-[12px] text-muted-foreground truncate mt-0.5">{n.text}</div>
                   </div>
                 </div>
               ))}
             </div>
           )}
 
+          {/* Настройки */}
           {active === 'settings' && (
-            <div className="px-1 space-y-1">
+            <div className="px-1 pt-1 space-y-0.5">
               {[
-                { icon: 'Bell', label: 'Уведомления', toggle: true },
-                { icon: 'Moon', label: 'Тёмная тема', toggle: true },
-                { icon: 'ShieldCheck', label: 'Сквозное шифрование', toggle: true },
-                { icon: 'Lock', label: 'Конфиденциальность', toggle: false },
-                { icon: 'Database', label: 'Данные и память', toggle: false },
-                { icon: 'CircleHelp', label: 'Помощь', toggle: false },
+                { icon:'Bell', label:'Уведомления', toggle:true, on:true },
+                { icon:'ShieldCheck', label:'Сквозное шифрование', toggle:true, on:true },
+                { icon:'Moon', label:'Тёмная тема', toggle:true, on:true },
+                { icon:'Lock', label:'Конфиденциальность', toggle:false },
+                { icon:'Database', label:'Данные и память', toggle:false },
+                { icon:'CircleHelp', label:'Помощь', toggle:false },
               ].map((s, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 transition-colors">
-                  <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center shrink-0 text-muted-foreground">
+                <div key={i} className="flex items-center gap-3 px-3 py-3 rounded-2xl hover:bg-secondary/60 transition-colors">
+                  <div className="w-9 h-9 rounded-xl bg-secondary flex items-center justify-center shrink-0 text-muted-foreground">
                     <Icon name={s.icon} size={17} />
                   </div>
-                  <span className="flex-1 text-sm font-medium">{s.label}</span>
-                  {s.toggle ? (
-                    <Switch defaultChecked />
-                  ) : (
-                    <Icon name="ChevronRight" size={17} className="text-muted-foreground" />
-                  )}
+                  <span className="flex-1 text-[14px] font-medium">{s.label}</span>
+                  {s.toggle ? <Switch defaultChecked={s.on} /> : <Icon name="ChevronRight" size={16} className="text-muted-foreground" />}
                 </div>
               ))}
+              <div className="pt-3 px-3">
+                <button onClick={() => { localStorage.clear(); setOnboarded(false); setMyName(''); setMyNick(''); setStep(1); setNameInput(''); setPhoneInput(''); setNickInput(''); }}
+                  className="text-sm text-red-400 hover:text-red-300 transition-colors">
+                  Выйти из аккаунта
+                </button>
+              </div>
             </div>
           )}
         </div>
       </section>
 
-      {/* Окно чата */}
-      <main className="flex-1 flex flex-col bg-background min-w-0">
-        {selectedChat && active === 'chats' ? (
+      {/* ── Окно чата / заглушка ── */}
+      <main className="flex-1 flex flex-col min-w-0 bg-background">
+        {selected && active === 'chats' ? (
           <>
-            <header className="h-[72px] shrink-0 px-6 flex items-center justify-between border-b border-border bg-card/40">
+            {/* Шапка чата */}
+            <header className="h-[60px] shrink-0 flex items-center justify-between px-5 border-b border-border/60 bg-card/40 backdrop-blur">
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <Avatar className="w-11 h-11">
-                    <AvatarFallback className={`${selectedChat.group ? 'bg-primary/20 text-primary' : 'bg-secondary'} font-semibold`}>
-                      {selectedChat.group ? <Icon name="Users" size={18} /> : selectedChat.name.split(' ').map((w) => w[0]).join('')}
+                  <Avatar className="w-10 h-10">
+                    <AvatarFallback className={`${selected.group ? 'bg-primary/20 text-primary' : avatarColor(selected.name) + ' text-white'} font-semibold text-sm`}>
+                      {selected.group ? <Icon name="Users" size={16} /> : selected.name.split(' ').map(w=>w[0]).join('')}
                     </AvatarFallback>
                   </Avatar>
-                  {selectedChat.online && <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-green-500 border-2 border-card" />}
+                  {selected.online && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-card" />}
                 </div>
                 <div>
-                  <div className="font-semibold">{selectedChat.name}</div>
-                  <div className="text-xs text-muted-foreground">{selectedChat.online ? 'в сети' : selectedChat.handle}</div>
+                  <div className="font-semibold text-[15px]">{selected.name}</div>
+                  <div className="text-[12px] text-muted-foreground">{selected.online ? 'в сети' : selected.handle}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-primary">
-                  <Icon name="Phone" size={19} />
-                </Button>
-                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-primary">
-                  <Icon name="Video" size={19} />
-                </Button>
-                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-primary">
-                  <Icon name="Search" size={19} />
-                </Button>
-                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-primary">
-                  <Icon name="EllipsisVertical" size={19} />
-                </Button>
+              <div className="flex items-center gap-0.5">
+                {[{icon:'Phone'},{icon:'Video'},{icon:'Search'},{icon:'EllipsisVertical'}].map((b,i) => (
+                  <Button key={i} size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-primary">
+                    <Icon name={b.icon} size={18} />
+                  </Button>
+                ))}
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-3">
-              <div className="text-center">
-                <span className="text-xs text-muted-foreground bg-secondary/60 px-3 py-1 rounded-full">Сегодня</span>
+            {/* Сообщения */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-2">
+              <div className="flex justify-center mb-4">
+                <span className="text-[11px] text-muted-foreground bg-secondary/70 px-3 py-1 rounded-full">Сегодня</span>
               </div>
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.mine ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                  <div
-                    className={`max-w-[60%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+              {messages.map((msg, i) => {
+                const prev = messages[i - 1];
+                const grouped = prev?.mine === msg.mine;
+                return (
+                  <div key={msg.id} className={`flex ${msg.mine ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                    <div className={`max-w-[58%] px-3.5 py-2 text-[14px] leading-relaxed ${
                       msg.mine
-                        ? 'bg-primary text-primary-foreground rounded-br-md'
-                        : 'bg-card border border-border rounded-bl-md'
-                    }`}
-                  >
-                    <p>{msg.text}</p>
-                    <div className={`text-[11px] mt-1 ${msg.mine ? 'text-primary-foreground/70' : 'text-muted-foreground'} text-right`}>
-                      {msg.time}
+                        ? 'bg-primary text-primary-foreground rounded-[18px] rounded-br-[5px]'
+                        : 'bg-card border border-border/60 rounded-[18px] rounded-bl-[5px]'
+                    } ${grouped ? (msg.mine ? 'rounded-br-[18px]' : 'rounded-bl-[18px]') : ''}`}>
+                      <p>{msg.text}</p>
+                      <div className={`text-[10px] mt-1 ${msg.mine ? 'text-primary-foreground/60' : 'text-muted-foreground'} text-right flex items-center justify-end gap-1`}>
+                        {msg.time}
+                        {msg.mine && <Icon name="CheckCheck" size={12} />}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
+              <div ref={messagesEndRef} />
             </div>
 
-            <footer className="shrink-0 px-6 py-4 border-t border-border bg-card/40">
-              <div className="flex items-center gap-2">
-                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-primary shrink-0">
-                  <Icon name="Paperclip" size={20} />
+            {/* Поле ввода */}
+            <div className="shrink-0 px-4 py-3 border-t border-border/60 bg-card/40 backdrop-blur">
+              <div className="flex items-center gap-2 bg-secondary/80 rounded-2xl px-2 py-1">
+                <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-primary shrink-0">
+                  <Icon name="Paperclip" size={19} />
                 </Button>
-                <Input
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                  placeholder="Напишите сообщение…"
-                  className="bg-secondary border-none h-11 text-sm"
-                />
-                <Button
-                  onClick={sendMessage}
-                  size="icon"
-                  className="shrink-0 h-11 w-11 bg-primary hover:bg-primary/90 text-primary-foreground"
-                >
-                  <Icon name="Send" size={19} />
+                <input value={draft} onChange={e => setDraft(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (send(), e.preventDefault())}
+                  placeholder="Сообщение…"
+                  className="flex-1 bg-transparent text-[14px] outline-none placeholder:text-muted-foreground py-2 text-foreground" />
+                <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-primary shrink-0">
+                  <Icon name="Smile" size={19} />
                 </Button>
+                <button onClick={send}
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 ${
+                    draft.trim() ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground/40'
+                  }`}>
+                  <Icon name="Send" size={17} />
+                </button>
               </div>
-            </footer>
+            </div>
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-center px-8 animate-scale-in">
-            <div className="w-20 h-20 rounded-2xl bg-secondary flex items-center justify-center mb-5">
-              <Icon name={navItems.find((n) => n.key === active)?.icon || 'MessageSquare'} size={36} className="text-primary" />
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-[#F0C84E]/20 to-[#9A7118]/10 flex items-center justify-center mb-5 border border-primary/15">
+              <Icon name={NAV.find(n=>n.key===active)?.icon||'Gem'} size={40} className="text-primary/60" />
             </div>
-            <h2 className="text-xl font-display font-bold mb-2">Prime Business</h2>
-            <p className="text-muted-foreground max-w-sm text-sm">
-              Защищённое общение для профессионалов. Выберите чат слева или начните новый разговор.
+            <h2 className="text-xl font-display font-bold mb-2 text-foreground/80">Prime Business</h2>
+            <p className="text-[13px] text-muted-foreground max-w-xs leading-relaxed">
+              Выберите чат слева или пригласите коллег по ссылке для начала общения.
             </p>
           </div>
         )}
       </main>
     </div>
   );
-};
+}
 
-const AddContactDialog = () => {
+function EmptyState({ icon, text }: { icon: string; text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-secondary/60 flex items-center justify-center mb-3">
+        <Icon name={icon} size={26} className="text-muted-foreground/50" />
+      </div>
+      <p className="text-[13px] text-muted-foreground leading-relaxed">{text}</p>
+    </div>
+  );
+}
+
+function AddContactDialog({ myNick }: { myNick: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const inviteLink = 'https://prime.app/i/mk-9f3a21';
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const copyLink = () => {
-    navigator.clipboard?.writeText(inviteLink);
+  const generateInvite = async () => {
+    if (inviteUrl) return;
+    setLoading(true);
+    try {
+      const base = window.location.origin + window.location.pathname;
+      const res = await fetch(API.invite, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ owner_nick: myNick, base_url: base }),
+      });
+      const data = await res.json();
+      setInviteUrl(data.url || '');
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const copy = () => {
+    navigator.clipboard?.writeText(inviteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={v => { setOpen(v); if (v) generateInvite(); }}>
       <DialogTrigger asChild>
-        <Button size="icon" className="h-9 w-9 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg">
-          <Icon name="Plus" size={20} />
+        <Button size="icon" className="h-8 w-8 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl">
+          <Icon name="Plus" size={18} />
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-card border-border">
+      <DialogContent className="bg-card border-border/60 rounded-2xl max-w-sm">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">Добавить в Prime</DialogTitle>
         </DialogHeader>
-        <Tabs defaultValue="nick" className="mt-2">
-          <TabsList className="w-full bg-secondary">
-            <TabsTrigger value="nick" className="flex-1">Ник</TabsTrigger>
-            <TabsTrigger value="phone" className="flex-1">Телефон</TabsTrigger>
-            <TabsTrigger value="link" className="flex-1">Ссылка</TabsTrigger>
+        <Tabs defaultValue="link" className="mt-2">
+          <TabsList className="w-full bg-secondary rounded-xl">
+            <TabsTrigger value="link" className="flex-1 rounded-lg">Ссылка</TabsTrigger>
+            <TabsTrigger value="nick" className="flex-1 rounded-lg">По нику</TabsTrigger>
+            <TabsTrigger value="phone" className="flex-1 rounded-lg">Телефон</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="link" className="mt-4 space-y-3">
+            <p className="text-[13px] text-muted-foreground leading-relaxed">
+              Отправьте ссылку. После регистрации по ней человек автоматически появится в ваших контактах.
+            </p>
+            {loading ? (
+              <div className="flex items-center justify-center py-4">
+                <Icon name="Loader" size={22} className="animate-spin text-primary" />
+              </div>
+            ) : inviteUrl ? (
+              <div className="bg-secondary/80 rounded-xl p-3 flex items-center gap-2">
+                <Icon name="Link2" size={16} className="text-primary shrink-0" />
+                <span className="text-[12px] font-mono truncate flex-1 text-muted-foreground">{inviteUrl}</span>
+              </div>
+            ) : null}
+            <div className="flex gap-2">
+              <Button onClick={copy} variant="secondary" className="flex-1 h-11 rounded-xl" disabled={!inviteUrl}>
+                <Icon name={copied ? 'Check' : 'Copy'} size={16} className="mr-2" />
+                {copied ? 'Скопировано!' : 'Копировать'}
+              </Button>
+              <Button onClick={() => { if (inviteUrl && navigator.share) navigator.share({ url: inviteUrl, title: 'Prime — приглашение' }); }}
+                className="flex-1 h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground" disabled={!inviteUrl}>
+                <Icon name="Share2" size={16} className="mr-2" /> Поделиться
+              </Button>
+            </div>
+          </TabsContent>
+
           <TabsContent value="nick" className="mt-4 space-y-3">
             <div className="relative">
-              <Icon name="AtSign" size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="username" className="pl-9 bg-secondary border-none h-11" />
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary font-bold">@</span>
+              <Input placeholder="username" className="pl-8 bg-secondary border-none h-11 rounded-xl" />
             </div>
-            <Button className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Icon name="UserPlus" size={18} className="mr-2" /> Добавить контакт
+            <Button className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl">
+              <Icon name="UserPlus" size={17} className="mr-2" /> Добавить
             </Button>
           </TabsContent>
+
           <TabsContent value="phone" className="mt-4 space-y-3">
             <div className="relative">
-              <Icon name="Phone" size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="+7 (___) ___-__-__" className="pl-9 bg-secondary border-none h-11" />
+              <Icon name="Phone" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="+7 (___) ___-__-__" className="pl-10 bg-secondary border-none h-11 rounded-xl" />
             </div>
-            <Button className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Icon name="UserPlus" size={18} className="mr-2" /> Добавить контакт
+            <Button className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl">
+              <Icon name="UserPlus" size={17} className="mr-2" /> Добавить
             </Button>
-          </TabsContent>
-          <TabsContent value="link" className="mt-4 space-y-3">
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Отправьте ссылку-приглашение. После регистрации в Prime по ней человек автоматически появится в ваших контактах.
-            </p>
-            <div className="flex items-center gap-2 bg-secondary rounded-lg p-2.5">
-              <Icon name="Link2" size={17} className="text-primary shrink-0" />
-              <span className="text-sm truncate flex-1 font-mono">{inviteLink}</span>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={copyLink} variant="secondary" className="flex-1 h-11">
-                <Icon name={copied ? 'Check' : 'Copy'} size={17} className="mr-2" />
-                {copied ? 'Скопировано' : 'Копировать'}
-              </Button>
-              <Button className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Icon name="Share2" size={17} className="mr-2" /> Поделиться
-              </Button>
-            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
     </Dialog>
   );
-};
-
-export default Index;
+}
