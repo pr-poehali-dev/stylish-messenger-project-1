@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,12 +50,123 @@ const calls = [
 ];
 
 const Index = () => {
+  const [onboarded, setOnboarded] = useState(() => !!localStorage.getItem('prime_nick'));
+  const [nickInput, setNickInput] = useState('');
+  const [nameInput, setNameInput] = useState('');
+  const [myNick, setMyNick] = useState(() => localStorage.getItem('prime_nick') || '');
+  const [myName, setMyName] = useState(() => localStorage.getItem('prime_name') || '');
+  const [step, setStep] = useState(1);
+
   const [active, setActive] = useState('chats');
   const [chats] = useState(initialChats);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(initialChats[0]);
   const [messages, setMessages] = useState(initialMessages);
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (onboarded) {
+      setMyNick(localStorage.getItem('prime_nick') || '');
+      setMyName(localStorage.getItem('prime_name') || '');
+    }
+  }, [onboarded]);
+
+  const handleOnboard = () => {
+    if (step === 1 && nameInput.trim()) { setStep(2); return; }
+    if (step === 2 && nickInput.trim()) {
+      const nick = nickInput.startsWith('@') ? nickInput : '@' + nickInput;
+      localStorage.setItem('prime_nick', nick);
+      localStorage.setItem('prime_name', nameInput.trim());
+      setMyNick(nick);
+      setMyName(nameInput.trim());
+      setOnboarded(true);
+    }
+  };
+
+  const initials = myName ? myName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() : 'МК';
+
+  if (!onboarded) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-background font-sans relative overflow-hidden">
+        {/* фоновый узор */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(180,140,40,0.15),transparent)]" />
+        <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_60px,rgba(180,140,40,0.03)_60px,rgba(180,140,40,0.03)_61px)]" />
+
+        <div className="relative z-10 w-full max-w-sm px-6 animate-fade-in">
+          {/* Логотип */}
+          <div className="flex flex-col items-center mb-10">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#E6B84A] to-[#A8801F] flex items-center justify-center shadow-2xl shadow-primary/30 mb-3">
+              <Icon name="Gem" size={32} className="text-[#2a2008]" />
+            </div>
+            <span className="text-xl font-display font-bold tracking-widest text-primary uppercase">Prime</span>
+            <p className="text-sm text-muted-foreground mt-1">Деловой мессенджер</p>
+          </div>
+
+          {/* Шаг 1 — Имя */}
+          {step === 1 && (
+            <div className="space-y-4 animate-fade-in">
+              <div>
+                <p className="text-lg font-semibold mb-1">Как вас зовут?</p>
+                <p className="text-sm text-muted-foreground">Укажите имя и фамилию — их будут видеть ваши контакты</p>
+              </div>
+              <Input
+                autoFocus
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleOnboard()}
+                placeholder="Иван Петров"
+                className="bg-secondary border-none h-12 text-base"
+              />
+              <Button
+                onClick={handleOnboard}
+                disabled={!nameInput.trim()}
+                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
+              >
+                Продолжить <Icon name="ArrowRight" size={18} className="ml-2" />
+              </Button>
+            </div>
+          )}
+
+          {/* Шаг 2 — Ник */}
+          {step === 2 && (
+            <div className="space-y-4 animate-fade-in">
+              <div>
+                <p className="text-lg font-semibold mb-1">Придумайте ник</p>
+                <p className="text-sm text-muted-foreground">По нику вас смогут найти и добавить в Prime</p>
+              </div>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-primary font-semibold">@</span>
+                <Input
+                  autoFocus
+                  value={nickInput.replace('@', '')}
+                  onChange={(e) => setNickInput(e.target.value.replace('@', ''))}
+                  onKeyDown={(e) => e.key === 'Enter' && handleOnboard()}
+                  placeholder="username"
+                  className="bg-secondary border-none h-12 text-base pl-8"
+                />
+              </div>
+              <Button
+                onClick={handleOnboard}
+                disabled={!nickInput.trim()}
+                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
+              >
+                Войти в Prime <Icon name="Gem" size={17} className="ml-2" />
+              </Button>
+              <button onClick={() => setStep(1)} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">
+                ← Назад
+              </button>
+            </div>
+          )}
+
+          {/* Индикатор шагов */}
+          <div className="flex justify-center gap-2 mt-8">
+            <span className={`w-6 h-1 rounded-full transition-colors ${step === 1 ? 'bg-primary' : 'bg-secondary'}`} />
+            <span className={`w-6 h-1 rounded-full transition-colors ${step === 2 ? 'bg-primary' : 'bg-secondary'}`} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const sendMessage = () => {
     if (!draft.trim()) return;
@@ -100,10 +211,17 @@ const Index = () => {
             </div>
           </div>
         ))}
-        <div className="mt-auto">
-          <Avatar className="w-10 h-10 border border-border">
-            <AvatarFallback className="bg-secondary text-foreground text-sm font-semibold">МК</AvatarFallback>
+        <div className="mt-auto group relative">
+          <Avatar className="w-10 h-10 border border-primary/30 cursor-pointer">
+            <AvatarFallback className="bg-primary/20 text-primary text-sm font-bold">{initials}</AvatarFallback>
           </Avatar>
+          <div className="pointer-events-none absolute left-[48px] bottom-0 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+            <div className="bg-[#1a1209] border border-primary/20 text-foreground text-xs px-3 py-2 rounded-lg whitespace-nowrap shadow-xl">
+              <div className="font-semibold">{myName}</div>
+              <div className="text-muted-foreground">{myNick}</div>
+              <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-[#1a1209]" />
+            </div>
+          </div>
         </div>
       </aside>
 
