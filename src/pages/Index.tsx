@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,6 +6,12 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
+
+const API = {
+  invite:   'https://functions.poehali.dev/ee2985a0-952f-4623-bf65-928c7a501a52',
+  register: 'https://functions.poehali.dev/3ebebc3b-093a-436a-811b-993a2419f278',
+  contacts: 'https://functions.poehali.dev/ab2b7912-6900-46eb-8256-042b9e377d8c',
+};
 
 type Chat = {
   id: number;
@@ -23,6 +29,12 @@ type Message = {
   text: string;
   time: string;
   mine: boolean;
+};
+
+type Contact = {
+  name: string;
+  nick: string;
+  phone: string;
 };
 
 const initialChats: Chat[] = [];

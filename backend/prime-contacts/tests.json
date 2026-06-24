@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "Get contacts",
+      "method": "GET",
+      "path": "/?nick=@test_reg_user",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

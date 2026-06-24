@@ -1,0 +1,19 @@
+{
+  "tests": [
+    {
+      "name": "Generate invite",
+      "method": "POST",
+      "path": "/",
+      "body": {"owner_nick": "@test_user", "base_url": "https://example.com"},
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Invalid token",
+      "method": "GET",
+      "path": "/?token=invalidtoken",
+      "expectedStatus": 404,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

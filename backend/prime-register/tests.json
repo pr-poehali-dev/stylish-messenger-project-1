@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Register user",
+      "method": "POST",
+      "path": "/",
+      "body": {"name": "Тест Юзер", "nick": "test_reg_user", "phone": "+7 (999) 000-00-00"},
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
