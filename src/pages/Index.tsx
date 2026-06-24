@@ -53,6 +53,7 @@ const Index = () => {
   const [onboarded, setOnboarded] = useState(() => !!localStorage.getItem('prime_nick'));
   const [nickInput, setNickInput] = useState('');
   const [nameInput, setNameInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const [myNick, setMyNick] = useState(() => localStorage.getItem('prime_nick') || '');
   const [myName, setMyName] = useState(() => localStorage.getItem('prime_name') || '');
   const [step, setStep] = useState(1);
@@ -71,12 +72,25 @@ const Index = () => {
     }
   }, [onboarded]);
 
+  const formatPhone = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 11);
+    if (!digits) return '';
+    let res = '+7';
+    if (digits.length > 1) res += ' (' + digits.slice(1, 4);
+    if (digits.length >= 4) res += ') ' + digits.slice(4, 7);
+    if (digits.length >= 7) res += '-' + digits.slice(7, 9);
+    if (digits.length >= 9) res += '-' + digits.slice(9, 11);
+    return res;
+  };
+
   const handleOnboard = () => {
     if (step === 1 && nameInput.trim()) { setStep(2); return; }
-    if (step === 2 && nickInput.trim()) {
+    if (step === 2 && phoneInput.replace(/\D/g, '').length >= 11) { setStep(3); return; }
+    if (step === 3 && nickInput.trim()) {
       const nick = nickInput.startsWith('@') ? nickInput : '@' + nickInput;
       localStorage.setItem('prime_nick', nick);
       localStorage.setItem('prime_name', nameInput.trim());
+      localStorage.setItem('prime_phone', phoneInput);
       setMyNick(nick);
       setMyName(nameInput.trim());
       setOnboarded(true);
@@ -127,8 +141,39 @@ const Index = () => {
             </div>
           )}
 
-          {/* Шаг 2 — Ник */}
+          {/* Шаг 2 — Телефон */}
           {step === 2 && (
+            <div className="space-y-4 animate-fade-in">
+              <div>
+                <p className="text-lg font-semibold mb-1">Номер телефона</p>
+                <p className="text-sm text-muted-foreground">Нужен для входа и восстановления доступа</p>
+              </div>
+              <div className="relative">
+                <Icon name="Phone" size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  value={phoneInput}
+                  onChange={(e) => setPhoneInput(formatPhone(e.target.value))}
+                  onKeyDown={(e) => e.key === 'Enter' && handleOnboard()}
+                  placeholder="+7 (___) ___-__-__"
+                  className="bg-secondary border-none h-12 text-base pl-10"
+                />
+              </div>
+              <Button
+                onClick={handleOnboard}
+                disabled={phoneInput.replace(/\D/g, '').length < 11}
+                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-base"
+              >
+                Продолжить <Icon name="ArrowRight" size={18} className="ml-2" />
+              </Button>
+              <button onClick={() => setStep(1)} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">
+                ← Назад
+              </button>
+            </div>
+          )}
+
+          {/* Шаг 3 — Ник */}
+          {step === 3 && (
             <div className="space-y-4 animate-fade-in">
               <div>
                 <p className="text-lg font-semibold mb-1">Придумайте ник</p>
@@ -152,7 +197,7 @@ const Index = () => {
               >
                 Войти в Prime <Icon name="Gem" size={17} className="ml-2" />
               </Button>
-              <button onClick={() => setStep(1)} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">
+              <button onClick={() => setStep(2)} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center">
                 ← Назад
               </button>
             </div>
@@ -160,8 +205,9 @@ const Index = () => {
 
           {/* Индикатор шагов */}
           <div className="flex justify-center gap-2 mt-8">
-            <span className={`w-6 h-1 rounded-full transition-colors ${step === 1 ? 'bg-primary' : 'bg-secondary'}`} />
-            <span className={`w-6 h-1 rounded-full transition-colors ${step === 2 ? 'bg-primary' : 'bg-secondary'}`} />
+            <span className={`w-6 h-1 rounded-full transition-colors ${step >= 1 ? 'bg-primary' : 'bg-secondary'}`} />
+            <span className={`w-6 h-1 rounded-full transition-colors ${step >= 2 ? 'bg-primary' : 'bg-secondary'}`} />
+            <span className={`w-6 h-1 rounded-full transition-colors ${step >= 3 ? 'bg-primary' : 'bg-secondary'}`} />
           </div>
         </div>
       </div>
