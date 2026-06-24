@@ -80,8 +80,8 @@ const Index = () => {
     <div className="h-screen w-full flex bg-background text-foreground font-sans overflow-hidden">
       {/* Левая навигация */}
       <aside className="w-[72px] shrink-0 bg-card border-r border-border flex flex-col items-center py-5 gap-2">
-        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
-          <Icon name="Hexagon" size={22} className="text-primary-foreground" />
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E6B84A] to-[#A8801F] flex items-center justify-center mb-4 shadow-lg shadow-primary/30">
+          <Icon name="Hexagon" size={22} className="text-[#2a2008]" />
         </div>
         {navItems.map((item) => (
           <button
@@ -341,6 +341,15 @@ const Index = () => {
 
 const AddContactDialog = () => {
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const inviteLink = 'https://prime.app/i/mk-9f3a21';
+
+  const copyLink = () => {
+    navigator.clipboard?.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -354,8 +363,9 @@ const AddContactDialog = () => {
         </DialogHeader>
         <Tabs defaultValue="nick" className="mt-2">
           <TabsList className="w-full bg-secondary">
-            <TabsTrigger value="nick" className="flex-1">По нику</TabsTrigger>
-            <TabsTrigger value="phone" className="flex-1">По телефону</TabsTrigger>
+            <TabsTrigger value="nick" className="flex-1">Ник</TabsTrigger>
+            <TabsTrigger value="phone" className="flex-1">Телефон</TabsTrigger>
+            <TabsTrigger value="link" className="flex-1">Ссылка</TabsTrigger>
           </TabsList>
           <TabsContent value="nick" className="mt-4 space-y-3">
             <div className="relative">
@@ -374,6 +384,24 @@ const AddContactDialog = () => {
             <Button className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground">
               <Icon name="UserPlus" size={18} className="mr-2" /> Добавить контакт
             </Button>
+          </TabsContent>
+          <TabsContent value="link" className="mt-4 space-y-3">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Отправьте ссылку-приглашение. После регистрации в Prime по ней человек автоматически появится в ваших контактах.
+            </p>
+            <div className="flex items-center gap-2 bg-secondary rounded-lg p-2.5">
+              <Icon name="Link2" size={17} className="text-primary shrink-0" />
+              <span className="text-sm truncate flex-1 font-mono">{inviteLink}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={copyLink} variant="secondary" className="flex-1 h-11">
+                <Icon name={copied ? 'Check' : 'Copy'} size={17} className="mr-2" />
+                {copied ? 'Скопировано' : 'Копировать'}
+              </Button>
+              <Button className="flex-1 h-11 bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Icon name="Share2" size={17} className="mr-2" /> Поделиться
+              </Button>
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>
